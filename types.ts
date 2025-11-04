@@ -1,9 +1,36 @@
-// FIX: Implemented the missing type definitions used throughout the application.
+// types.ts
 
 export type AttentionType = 'CONSULTA GENERAL' | 'CONTROL DE CRONICOS' | 'ATENCION PRENATAL' | 'NIÑO SANO';
 
+// NEW: SuperAdmin for top-level management
+export interface SuperAdmin {
+  id: string;
+  name: string;
+  password?: string;
+}
+
+// NEW: HealthUnit represents a clinic or hospital
+export interface HealthUnit {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  slogan?: string;
+  logo?: string; // base64 string
+}
+
+// NEW: HealthUnitAdmin manages a specific HealthUnit
+export interface HealthUnitAdmin {
+  id: string;
+  healthUnitId: string;
+  name:string;
+  password?: string;
+}
+
+// MODIFIED: Doctor is now tied to a HealthUnit
 export interface Doctor {
   id: string;
+  healthUnitId: string;
   name: string;
   professionalLicense: string;
   university: string;
@@ -14,15 +41,19 @@ export interface Doctor {
   password?: string;
 }
 
+// MODIFIED: Nurse is now tied to a HealthUnit
 export interface Nurse {
   id: string;
+  healthUnitId: string;
   name: string;
   password?: string;
 }
 
+// MODIFIED: Patient is now tied to a HealthUnit
 export interface Patient {
   id: string;
   doctorId: string;
+  healthUnitId: string;
   patientCode?: string; // Código único del paciente (ej: P-001)
   name: string;
   dob: string; // YYYY-MM-DD
@@ -92,21 +123,18 @@ export interface Consultation {
   abortos?: number;
   cesareas?: number;
   fur?: string; // Fecha de Última Regla (YYYY-MM-DD)
-  fpp?: string; // Fecha Probable de Parto (YYYY-MM-DD) calculated
-  sdg?: string; // Semanas de Gestación (calculated)
+  fpp?: string; // Fecha Probable de Parto (YYYY-MM-DD) calculated by FUR
+  sdg?: string; // Semanas de Gestación (calculated by FUR)
   fcf?: number; // Frecuencia Cardiaca Fetal
   afu?: number; // Altura de Fondo Uterino (cm)
+  usgDate?: string; // Fecha del ultrasonido para cálculo
+  usgWeeks?: number; // Semanas reportadas en el USG
+  usgDays?: number; // Días reportados en el USG
+  sdgByUsg?: string; // SDG actual calculado por USG
+  fppByUsg?: string; // FPP calculado por USG
 }
 
-export interface ClinicInfo {
-    name: string;
-    address: string;
-    phone: string;
-    slogan?: string;
-    logo?: string; // base64 string
-}
-
+// MODIFIED: AppSettings is simplified as ClinicInfo is now in HealthUnit
 export interface AppSettings {
   medicationsUrl: string;
-  clinicInfo?: ClinicInfo;
 }

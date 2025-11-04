@@ -6,7 +6,7 @@ import { PlusIcon } from './icons/PlusIcon';
 import { generatePatientExplanation } from '../services/geminiService';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import Modal from './Modal';
-import { calculateGestationalAge, calculateDueDate } from '../utils/dateUtils';
+import { calculateGestationalAge, calculateDueDate, calculateCurrentSDGbyUSG, calculateDueDateByUSG } from '../utils/dateUtils';
 
 
 interface ConsultationFormProps {
@@ -42,6 +42,9 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
     fur: consultation?.fur || '',
     fcf: consultation?.fcf,
     afu: consultation?.afu,
+    usgDate: consultation?.usgDate || '',
+    usgWeeks: consultation?.usgWeeks,
+    usgDays: consultation?.usgDays,
   });
 
   const [vitalSigns, setVitalSigns] = useState<VitalSigns>(consultation?.vitalSigns || {});
@@ -111,6 +114,18 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
     return { sdg: null, fpp: null };
   }, [formData.fur]);
 
+  const usgCalculations = useMemo(() => {
+    const weeks = Number(formData.usgWeeks);
+    const days = Number(formData.usgDays);
+    if (formData.usgDate && !isNaN(weeks) && !isNaN(days)) {
+      const sdgByUsg = calculateCurrentSDGbyUSG(formData.usgDate, weeks, days);
+      const fppByUsg = calculateDueDateByUSG(formData.usgDate, weeks, days);
+      return { sdgByUsg, fppByUsg };
+    }
+    return { sdgByUsg: null, fppByUsg: null };
+  }, [formData.usgDate, formData.usgWeeks, formData.usgDays]);
+
+
   useEffect(() => {
     if (bmi.value) {
       setVitalSigns(prev => ({ ...prev, bmi: bmi.value, bmiInterpretation: bmi.interpretation }));
@@ -123,9 +138,9 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    if (['cost', 'gestas', 'partos', 'abortos', 'cesareas', 'fcf', 'afu'].includes(name)) {
+    if (['cost', 'gestas', 'partos', 'abortos', 'cesareas', 'fcf', 'afu', 'usgWeeks', 'usgDays'].includes(name)) {
         setFormData(prev => ({ ...prev, [name]: value === '' ? undefined : Number(value) }));
-    } else if (name === 'fur' || name === 'nextAppointment') {
+    } else if (['fur', 'nextAppointment', 'usgDate'].includes(name)) {
         setFormData(prev => ({ ...prev, [name]: value }));
     } else if (type === 'radio') {
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -177,6 +192,8 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
       },
       fpp: prenatalCalculations.fpp || undefined,
       sdg: prenatalCalculations.sdg || undefined,
+      sdgByUsg: usgCalculations.sdgByUsg || undefined,
+      fppByUsg: usgCalculations.fppByUsg || undefined,
       status: 'COMPLETED' as 'COMPLETED', // Mark as completed
     };
     
@@ -437,6 +454,35 @@ ESPACIO RETROVESICAL, HEPATOBILIAR Y ESPLENO RENAL SIN COLECCIONES LIBRES`;
                     </div>
                 </div>
             )}
+            <div className="mt-4 pt-4 border-t border-pink-300">
+              <h4 className="text-sm font-bold text-slate-700 mb-2">Calculadora por Ultrasonido</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                      <label htmlFor="usgDate" className="block text-xs font-medium text-slate-600">Fecha del USG</label>
+                      <input type="date" name="usgDate" id="usgDate" value={formData.usgDate} onChange={handleChange} className="mt-1 block w-full input-style" />
+                  </div>
+                  <div>
+                      <label htmlFor="usgWeeks" className="block text-xs font-medium text-slate-600">Semanas</label>
+                      <input type="number" name="usgWeeks" id="usgWeeks" value={formData.usgWeeks || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                  </div>
+                  <div>
+                      <label htmlFor="usgDays" className="block text-xs font-medium text-slate-600">Días</label>
+                      <input type="number" name="usgDays" id="usgDays" value={formData.usgDays || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                  </div>
+              </div>
+              {usgCalculations.sdgByUsg && usgCalculations.fppByUsg && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 mt-2 bg-white rounded-md border">
+                      <div>
+                          <p className="text-sm font-medium text-slate-600">SDG actual (por USG)</p>
+                          <p className="font-bold text-purple-700">{usgCalculations.sdgByUsg}</p>
+                      </div>
+                      <div>
+                          <p className="text-sm font-medium text-slate-600">FPP (por USG)</p>
+                          <p className="font-bold text-purple-700">{new Date(`${usgCalculations.fppByUsg}T00:00:00`).toLocaleDateString('es-MX', { dateStyle: 'long' })}</p>
+                      </div>
+                  </div>
+              )}
+          </div>
         </fieldset>
       )}
 

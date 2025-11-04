@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Doctor } from '../types';
+import { Doctor, HealthUnit } from '../types';
 
 interface DoctorFormProps {
   doctor?: Doctor;
+  healthUnits: HealthUnit[];
+  currentHealthUnitId?: string;
   onSave: (doctor: Omit<Doctor, 'id'> | Doctor) => void;
   onCancel: () => void;
 }
 
-const DoctorForm: React.FC<DoctorFormProps> = ({ doctor, onSave, onCancel }) => {
+const DoctorForm: React.FC<DoctorFormProps> = ({ doctor, healthUnits, currentHealthUnitId, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: doctor?.name || '',
     professionalLicense: doctor?.professionalLicense || '',
@@ -16,17 +18,22 @@ const DoctorForm: React.FC<DoctorFormProps> = ({ doctor, onSave, onCancel }) => 
     hasSpecialty: doctor?.hasSpecialty || false,
     specialtyName: doctor?.specialtyName || '',
     specialtyLicense: doctor?.specialtyLicense || '',
+    healthUnitId: doctor?.healthUnitId || currentHealthUnitId || healthUnits[0]?.id || ''
   });
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
     if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
-    } else {
+    } else if (name === 'healthUnitId') {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    else {
       setFormData(prev => ({ ...prev, [name]: value.toUpperCase() }));
     }
   };
@@ -63,6 +70,23 @@ const DoctorForm: React.FC<DoctorFormProps> = ({ doctor, onSave, onCancel }) => 
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-slate-700">Nombre Completo</label>
         <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full input-style" required />
+      </div>
+      <div>
+        <label htmlFor="healthUnitId" className="block text-sm font-medium text-slate-700">Unidad de Salud</label>
+        <select 
+          name="healthUnitId" 
+          id="healthUnitId" 
+          value={formData.healthUnitId} 
+          onChange={handleChange} 
+          className="mt-1 block w-full input-style" 
+          disabled={!!currentHealthUnitId}
+          required
+        >
+           <option value="" disabled>Seleccione una unidad</option>
+           {healthUnits.map(unit => (
+            <option key={unit.id} value={unit.id}>{unit.name}</option>
+           ))}
+        </select>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

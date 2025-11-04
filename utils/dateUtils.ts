@@ -107,3 +107,56 @@ export const calculateDueDate = (lmp: string): string | null => {
 
   return `${year}-${month}-${day}`;
 };
+
+/**
+ * Calculates the current gestational age based on a past ultrasound.
+ * @param usgDateStr The date of the ultrasound in 'YYYY-MM-DD' format.
+ * @param weeksAtUsg The gestational age in weeks at the time of the ultrasound.
+ * @param daysAtUsg The gestational age in days at the time of the ultrasound.
+ * @returns The current gestational age as a formatted string.
+ */
+export const calculateCurrentSDGbyUSG = (usgDateStr: string, weeksAtUsg: number, daysAtUsg: number): string | null => {
+  if (!usgDateStr || isNaN(weeksAtUsg) || isNaN(daysAtUsg)) return null;
+  
+  const usgDate = parseLocalDate(usgDateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (usgDate > today) return "Fecha de USG no puede ser en el futuro.";
+
+  const totalGestationalDaysAtUsg = (weeksAtUsg * 7) + daysAtUsg;
+  const daysSinceUsg = Math.floor((today.getTime() - usgDate.getTime()) / (1000 * 60 * 60 * 24));
+  const currentTotalGestationalDays = totalGestationalDaysAtUsg + daysSinceUsg;
+  
+  const currentWeeks = Math.floor(currentTotalGestationalDays / 7);
+  const currentDays = currentTotalGestationalDays % 7;
+  
+  return `${currentWeeks} semana(s) y ${currentDays} día(s)`;
+};
+
+/**
+ * Calculates the estimated due date (EDD) based on an ultrasound.
+ * @param usgDateStr The date of the ultrasound in 'YYYY-MM-DD' format.
+ * @param weeksAtUsg The gestational age in weeks at the time of the ultrasound.
+ * @param daysAtUsg The gestational age in days at the time of the ultrasound.
+ * @returns The EDD as a string in 'YYYY-MM-DD' format.
+ */
+export const calculateDueDateByUSG = (usgDateStr: string, weeksAtUsg: number, daysAtUsg: number): string | null => {
+  if (!usgDateStr || isNaN(weeksAtUsg) || isNaN(daysAtUsg)) return null;
+
+  const usgDate = parseLocalDate(usgDateStr);
+  const gestationalAgeInDays = (weeksAtUsg * 7) + daysAtUsg;
+  
+  // A standard pregnancy is 280 days. Calculate remaining days from the USG date.
+  const remainingDays = 280 - gestationalAgeInDays;
+  
+  const dueDate = new Date(usgDate);
+  dueDate.setDate(dueDate.getDate() + remainingDays);
+
+  // Format to YYYY-MM-DD
+  const year = dueDate.getFullYear();
+  const month = (dueDate.getMonth() + 1).toString().padStart(2, '0');
+  const day = dueDate.getDate().toString().padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};

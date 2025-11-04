@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Doctor, Nurse } from '../types';
+// FIX: Imported HealthUnit to use in props.
+import { Doctor, Nurse, HealthUnit } from '../types';
 import Modal from './Modal';
 import DoctorManagementModal from './DoctorManagementModal';
 import NurseManagementModal from './NurseManagementModal'; // New component
@@ -13,6 +14,8 @@ import { PowerIcon } from './icons/PowerIcon';
 interface LoginScreenProps {
   doctors: Doctor[];
   nurses: Nurse[];
+  // FIX: Added healthUnits to the props interface.
+  healthUnits: HealthUnit[];
   onSelectDoctor: (doctor: Doctor) => void;
   onAddDoctor: (doctor: Omit<Doctor, 'id'>) => void;
   onUpdateDoctor: (doctor: Doctor) => void;
@@ -22,7 +25,8 @@ interface LoginScreenProps {
 }
 
 const DoctorSelection: React.FC<LoginScreenProps> = ({ 
-  doctors, nurses, onSelectDoctor, onAddDoctor, onUpdateDoctor, onSelectNurse, onAddNurse, onUpdateNurse 
+  // FIX: Destructured healthUnits from props.
+  doctors, nurses, healthUnits, onSelectDoctor, onAddDoctor, onUpdateDoctor, onSelectNurse, onAddNurse, onUpdateNurse 
 }) => {
   const [view, setView] = useState<'main' | 'doctor' | 'nurse'>('main');
   const [isManageDoctorsOpen, setIsManageDoctorsOpen] = useState(false);
@@ -144,6 +148,8 @@ const DoctorSelection: React.FC<LoginScreenProps> = ({
       <Modal isOpen={isManageDoctorsOpen} onClose={() => setIsManageDoctorsOpen(false)} size="2xl">
         <DoctorManagementModal 
           doctors={doctors}
+          // FIX: Passed the required healthUnits prop.
+          healthUnits={healthUnits}
           onAddDoctor={onAddDoctor}
           onUpdateDoctor={onUpdateDoctor}
           onClose={() => setIsManageDoctorsOpen(false)}
@@ -153,6 +159,8 @@ const DoctorSelection: React.FC<LoginScreenProps> = ({
       <Modal isOpen={isManageNursesOpen} onClose={() => setIsManageNursesOpen(false)} size="2xl">
         <NurseManagementModal
           nurses={nurses}
+          // FIX: Passed the required healthUnits prop.
+          healthUnits={healthUnits}
           onAddNurse={onAddNurse}
           onUpdateNurse={onUpdateNurse}
           onClose={() => setIsManageNursesOpen(false)}

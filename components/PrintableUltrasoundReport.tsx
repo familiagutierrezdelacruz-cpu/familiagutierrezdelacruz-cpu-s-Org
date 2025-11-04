@@ -1,16 +1,16 @@
 // FIX: Implemented the missing PrintableUltrasoundReport component.
 import React from 'react';
-import { Patient, Doctor, Consultation, ClinicInfo } from '../types';
+import { Patient, Doctor, Consultation, HealthUnit } from '../types';
 import { calculateAge } from '../utils/dateUtils';
 
 interface PrintableUltrasoundReportProps {
   patient: Patient;
   doctor: Doctor;
   consultation: Consultation;
-  clinicInfo?: ClinicInfo;
+  healthUnit: HealthUnit;
 }
 
-const PrintableUltrasoundReport: React.FC<PrintableUltrasoundReportProps> = React.forwardRef<HTMLDivElement, PrintableUltrasoundReportProps>(({ patient, doctor, consultation, clinicInfo }, ref) => {
+const PrintableUltrasoundReport: React.FC<PrintableUltrasoundReportProps> = React.forwardRef<HTMLDivElement, PrintableUltrasoundReportProps>(({ patient, doctor, consultation, healthUnit }, ref) => {
   const reportDate = new Date(consultation.date).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
   const patientAge = calculateAge(patient.dob);
 
@@ -18,12 +18,12 @@ const PrintableUltrasoundReport: React.FC<PrintableUltrasoundReportProps> = Reac
     <div ref={ref} id="printable-ultrasound-report" className="p-4 sm:p-6 font-serif bg-white text-black text-sm">
       <header className="text-center pb-2 border-b-2 border-black">
         <div className="flex justify-center items-center gap-4">
-            {clinicInfo?.logo && <img src={clinicInfo.logo} alt="Logo" className="h-16 w-auto"/>}
+            {healthUnit?.logo && <img src={healthUnit.logo} alt="Logo" className="h-16 w-auto"/>}
             <div>
-                <h1 className="text-xl font-bold">{clinicInfo?.name || 'CONSULTORIO MÉDICO'}</h1>
-                <p className="text-xs">{clinicInfo?.address}</p>
-                <p className="text-xs">TEL. {clinicInfo?.phone}</p>
-                {clinicInfo?.slogan && <p className="text-xs italic">{clinicInfo.slogan}</p>}
+                <h1 className="text-xl font-bold">{healthUnit?.name || 'CONSULTORIO MÉDICO'}</h1>
+                <p className="text-xs">{healthUnit?.address}</p>
+                <p className="text-xs">TEL. {healthUnit?.phone}</p>
+                {healthUnit?.slogan && <p className="text-xs italic">{healthUnit.slogan}</p>}
             </div>
         </div>
         <div className="mt-2">

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { Nurse } from '../types';
+import { Nurse, HealthUnit } from '../types';
 import NurseForm from './NurseForm';
 import { PlusIcon } from './icons/PlusIcon';
 import { PencilIcon } from './icons/PencilIcon';
 
 interface NurseManagementModalProps {
   nurses: Nurse[];
+  healthUnits: HealthUnit[];
+  currentHealthUnitId?: string;
   onAddNurse: (nurse: Omit<Nurse, 'id'>) => void;
   onUpdateNurse: (nurse: Nurse) => void;
   onClose: () => void;
 }
 
-const NurseManagementModal: React.FC<NurseManagementModalProps> = ({ nurses, onAddNurse, onUpdateNurse, onClose }) => {
+const NurseManagementModal: React.FC<NurseManagementModalProps> = ({ nurses, healthUnits, currentHealthUnitId, onAddNurse, onUpdateNurse, onClose }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingNurse, setEditingNurse] = useState<Nurse | null>(null);
 
@@ -29,7 +31,7 @@ const NurseManagementModal: React.FC<NurseManagementModalProps> = ({ nurses, onA
     if ('id' in nurseData) {
       onUpdateNurse(nurseData as Nurse);
     } else {
-      onAddNurse(nurseData);
+      onAddNurse(nurseData as Omit<Nurse, 'id'>);
     }
     setIsFormVisible(false);
     setEditingNurse(null);
@@ -42,6 +44,8 @@ const NurseManagementModal: React.FC<NurseManagementModalProps> = ({ nurses, onA
       {isFormVisible ? (
         <NurseForm 
           nurse={editingNurse || undefined}
+          healthUnits={healthUnits}
+          currentHealthUnitId={currentHealthUnitId}
           onSave={handleSaveNurse}
           onCancel={() => setIsFormVisible(false)}
         />

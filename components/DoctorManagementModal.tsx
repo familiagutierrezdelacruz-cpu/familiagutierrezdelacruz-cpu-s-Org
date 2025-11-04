@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { Doctor } from '../types';
+import { Doctor, HealthUnit } from '../types';
 import DoctorForm from './DoctorForm';
 import { PlusIcon } from './icons/PlusIcon';
 import { PencilIcon } from './icons/PencilIcon';
 
 interface DoctorManagementModalProps {
   doctors: Doctor[];
+  healthUnits: HealthUnit[];
+  currentHealthUnitId?: string; // For unit admins, to lock selection
   onAddDoctor: (doctor: Omit<Doctor, 'id'>) => void;
   onUpdateDoctor: (doctor: Doctor) => void;
   onClose: () => void;
 }
 
-const DoctorManagementModal: React.FC<DoctorManagementModalProps> = ({ doctors, onAddDoctor, onUpdateDoctor, onClose }) => {
+const DoctorManagementModal: React.FC<DoctorManagementModalProps> = ({ doctors, healthUnits, currentHealthUnitId, onAddDoctor, onUpdateDoctor, onClose }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
 
@@ -29,7 +31,7 @@ const DoctorManagementModal: React.FC<DoctorManagementModalProps> = ({ doctors, 
     if ('id' in doctorData) {
       onUpdateDoctor(doctorData as Doctor);
     } else {
-      onAddDoctor(doctorData);
+      onAddDoctor(doctorData as Omit<Doctor, 'id'>);
     }
     setIsFormVisible(false);
     setEditingDoctor(null);
@@ -42,6 +44,8 @@ const DoctorManagementModal: React.FC<DoctorManagementModalProps> = ({ doctors, 
       {isFormVisible ? (
         <DoctorForm 
           doctor={editingDoctor || undefined}
+          healthUnits={healthUnits}
+          currentHealthUnitId={currentHealthUnitId}
           onSave={handleSaveDoctor}
           onCancel={() => setIsFormVisible(false)}
         />

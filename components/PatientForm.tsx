@@ -4,13 +4,10 @@ import { calculateAge } from '../utils/dateUtils';
 
 interface PatientFormProps {
   patient?: Patient;
-  // FIX: Changed the onSave prop type to correctly reflect that a new patient object
-  // from the form does not include 'id', 'doctorId', or 'patientCode'. This resolves the type error.
-  onSave: (patient: Omit<Patient, 'id' | 'doctorId' | 'patientCode'> | Patient) => void;
+  onSave: (patient: Omit<Patient, 'id' | 'doctorId' | 'patientCode' | 'healthUnitId'> | Patient) => void;
   onCancel: () => void;
 }
 
-// FIX: Implemented the missing PatientForm component to allow creating and editing patient data.
 const PatientForm: React.FC<PatientFormProps> = ({ patient, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: patient?.name || '',
@@ -127,11 +124,9 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onSave, onCancel }) 
         <button type="button" onClick={onCancel} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">Cancelar</button>
         <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Guardar</button>
       </div>
-       {/* FIX: Corrected a truncated and unterminated style template literal, which was causing a parsing error. */}
        <style>{`.input-style { background-color: white; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none;} .input-style:focus { ring: 2px; ring-color: #3b82f6; border-color: #3b82f6;}`}</style>
     </form>
   );
 };
 
-// FIX: Added a default export to make the component importable in other files.
 export default PatientForm;

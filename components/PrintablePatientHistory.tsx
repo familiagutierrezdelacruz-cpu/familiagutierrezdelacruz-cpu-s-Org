@@ -1,12 +1,12 @@
 import React from 'react';
-import { Patient, Doctor, Consultation, ClinicInfo, VitalSigns } from '../types';
+import { Patient, Doctor, Consultation, HealthUnit, VitalSigns } from '../types';
 import { calculateAge } from '../utils/dateUtils';
 
 interface PrintablePatientHistoryProps {
   patient: Patient;
   doctor: Doctor;
   consultations: Consultation[];
-  clinicInfo?: ClinicInfo;
+  healthUnit: HealthUnit;
 }
 
 const VitalSignsDisplay: React.FC<{ vitals: VitalSigns }> = ({ vitals }) => (
@@ -22,7 +22,7 @@ const VitalSignsDisplay: React.FC<{ vitals: VitalSigns }> = ({ vitals }) => (
 );
 
 
-const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.forwardRef<HTMLDivElement, PrintablePatientHistoryProps>(({ patient, doctor, consultations, clinicInfo }, ref) => {
+const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.forwardRef<HTMLDivElement, PrintablePatientHistoryProps>(({ patient, doctor, consultations, healthUnit }, ref) => {
   const patientAge = calculateAge(patient.dob);
   const sortedConsultations = [...consultations].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -30,11 +30,11 @@ const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.fo
     <div ref={ref} id="printable-history" className="p-4 sm:p-6 font-serif bg-white text-black text-sm">
       <header className="text-center pb-2 border-b-2 border-black">
         <div className="flex justify-center items-center gap-4">
-            {clinicInfo?.logo && <img src={clinicInfo.logo} alt="Logo" className="h-16 w-auto"/>}
+            {healthUnit?.logo && <img src={healthUnit.logo} alt="Logo" className="h-16 w-auto"/>}
             <div>
-                <h1 className="text-xl font-bold">{clinicInfo?.name || 'CONSULTORIO MÉDICO'}</h1>
-                <p className="text-xs">{clinicInfo?.address}</p>
-                <p className="text-xs">TEL. {clinicInfo?.phone}</p>
+                <h1 className="text-xl font-bold">{healthUnit?.name || 'CONSULTORIO MÉDICO'}</h1>
+                <p className="text-xs">{healthUnit?.address}</p>
+                <p className="text-xs">TEL. {healthUnit?.phone}</p>
             </div>
         </div>
       </header>
@@ -91,6 +91,14 @@ const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.fo
                                             {c.afu !== undefined && <span><span className="font-bold">AFU:</span> {c.afu} cm</span>}
                                         </p>
                                     }
+                                    {(c.sdgByUsg || c.fppByUsg) && (
+                                        <div className="mt-1 pt-1 border-t border-slate-300">
+                                            <p className="font-bold text-center text-xs">Datos por Ultrasonido</p>
+                                            {c.usgDate && <p><span className="font-bold">Fecha USG:</span> {new Date(`${c.usgDate}T00:00:00`).toLocaleDateString('es-MX')} ({c.usgWeeks}S, {c.usgDays}D)</p>}
+                                            {c.sdgByUsg && <p><span className="font-bold">SDG (a la consulta):</span> {c.sdgByUsg}</p>}
+                                            {c.fppByUsg && <p><span className="font-bold">FPP:</span> {new Date(`${c.fppByUsg}T00:00:00`).toLocaleDateString('es-MX', { dateStyle: 'long' })}</p>}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <p><span className="font-bold">Motivo:</span> {c.reason}</p>

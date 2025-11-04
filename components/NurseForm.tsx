@@ -1,17 +1,32 @@
 import React, { useState } from 'react';
-import { Nurse } from '../types';
+import { Nurse, HealthUnit } from '../types';
 
 interface NurseFormProps {
   nurse?: Nurse;
+  healthUnits: HealthUnit[];
+  currentHealthUnitId?: string;
   onSave: (nurse: Omit<Nurse, 'id'> | Nurse) => void;
   onCancel: () => void;
 }
 
-const NurseForm: React.FC<NurseFormProps> = ({ nurse, onSave, onCancel }) => {
-  const [name, setName] = useState(nurse?.name || '');
+const NurseForm: React.FC<NurseFormProps> = ({ nurse, healthUnits, currentHealthUnitId, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    name: nurse?.name || '',
+    healthUnitId: nurse?.healthUnitId || currentHealthUnitId || healthUnits[0]?.id || ''
+  });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'name') {
+      setFormData(prev => ({...prev, name: value.toUpperCase()}));
+    } else {
+      setFormData(prev => ({...prev, [name]: value}));
+    }
+  };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +42,7 @@ const NurseForm: React.FC<NurseFormProps> = ({ nurse, onSave, onCancel }) => {
       return;
     }
     
-    const finalNurseData: any = { name: name.toUpperCase() };
+    const finalNurseData: any = { ...formData };
     if (password) {
       finalNurseData.password = password;
     }
@@ -48,11 +63,28 @@ const NurseForm: React.FC<NurseFormProps> = ({ nurse, onSave, onCancel }) => {
             type="text" 
             name="name" 
             id="name" 
-            value={name} 
-            onChange={e => setName(e.target.value.toUpperCase())} 
+            value={formData.name} 
+            onChange={handleChange} 
             className="mt-1 block w-full input-style" 
             required 
         />
+      </div>
+       <div>
+        <label htmlFor="healthUnitId" className="block text-sm font-medium text-slate-700">Unidad de Salud</label>
+        <select 
+          name="healthUnitId" 
+          id="healthUnitId" 
+          value={formData.healthUnitId} 
+          onChange={handleChange} 
+          className="mt-1 block w-full input-style" 
+          disabled={!!currentHealthUnitId}
+          required
+        >
+           <option value="" disabled>Seleccione una unidad</option>
+           {healthUnits.map(unit => (
+            <option key={unit.id} value={unit.id}>{unit.name}</option>
+           ))}
+        </select>
       </div>
      
        <fieldset className="border p-4 rounded-md space-y-4">
