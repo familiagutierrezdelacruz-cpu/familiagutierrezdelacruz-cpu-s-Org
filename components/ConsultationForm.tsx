@@ -1,4 +1,3 @@
-// FIX: Implemented the missing ConsultationForm component.
 import React, { useState, useMemo, useEffect } from 'react';
 import { Consultation, Medication, Patient, VitalSigns, Doctor, AttentionType } from '../types';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -7,6 +6,8 @@ import { generatePatientExplanation } from '../services/geminiService';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import Modal from './Modal';
 import { calculateGestationalAge, calculateDueDate, calculateCurrentSDGbyUSG, calculateDueDateByUSG } from '../utils/dateUtils';
+import LabResultBuilderModal from './LabResultBuilderModal';
+import { BeakerIcon } from './icons/BeakerIcon';
 
 
 interface ConsultationFormProps {
@@ -28,6 +29,7 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
     physicalExam: consultation?.physicalExam || '',
     diagnosis: consultation?.diagnosis || '',
     labStudies: consultation?.labStudies || '',
+    labResults: consultation?.labResults || '',
     nextAppointment: consultation?.nextAppointment || '',
     cost: consultation?.cost || undefined,
     ultrasoundReportType: consultation?.ultrasoundReportType || '',
@@ -54,6 +56,7 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ patient, doctor, co
   const [isGenerating, setIsGenerating] = useState(false);
   
   const [isUltrasoundModalOpen, setIsUltrasoundModalOpen] = useState(false);
+  const [isLabModalOpen, setIsLabModalOpen] = useState(false);
 
   // Effect to pre-fill prenatal data for subsequent visits
   useEffect(() => {
@@ -555,8 +558,26 @@ ESPACIO RETROVESICAL, HEPATOBILIAR Y ESPLENO RENAL SIN COLECCIONES LIBRES`;
             </div>
         </div>
          <div>
-            <label htmlFor="labStudies" className="block text-sm font-medium text-slate-700">Estudios de Laboratorio/Gabinete</label>
+            <label htmlFor="labStudies" className="block text-sm font-medium text-slate-700">Estudios de Laboratorio/Gabinete Solicitados</label>
             <textarea name="labStudies" id="labStudies" value={formData.labStudies} onChange={handleChange} rows={3} className="mt-1 block w-full input-style" />
+        </div>
+        <div>
+            <label className="block text-sm font-medium text-slate-700">Resultados de Laboratorio Presentados</label>
+            <div className="mt-1 p-3 border rounded-md bg-slate-50 min-h-[80px]">
+                {formData.labResults ? (
+                    <pre className="whitespace-pre-wrap text-sm font-mono">{formData.labResults}</pre>
+                ) : (
+                    <p className="text-sm text-slate-400">No se han registrado resultados.</p>
+                )}
+            </div>
+            <button
+                type="button"
+                onClick={() => setIsLabModalOpen(true)}
+                className="mt-2 flex items-center gap-2 text-sm font-semibold text-blue-600"
+            >
+                <BeakerIcon className="w-4 h-4" />
+                <span>Añadir/Editar Resultados de Laboratorio</span>
+            </button>
         </div>
       </fieldset>
 
@@ -627,6 +648,16 @@ ESPACIO RETROVESICAL, HEPATOBILIAR Y ESPLENO RENAL SIN COLECCIONES LIBRES`;
       
       <Modal isOpen={isUltrasoundModalOpen} onClose={() => setIsUltrasoundModalOpen(false)}>
         <UltrasoundForm />
+      </Modal>
+
+      <Modal isOpen={isLabModalOpen} onClose={() => setIsLabModalOpen(false)} size="3xl">
+          <LabResultBuilderModal
+            onSave={(newLabResults) => {
+                setFormData(prev => ({...prev, labResults: newLabResults}));
+                setIsLabModalOpen(false);
+            }}
+            onCancel={() => setIsLabModalOpen(false)}
+          />
       </Modal>
 
       <style>{`.input-style { background-color: white; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none;} .input-style:focus { ring: 2px; ring-color: #3b82f6; border-color: #3b82f6;}`}</style>

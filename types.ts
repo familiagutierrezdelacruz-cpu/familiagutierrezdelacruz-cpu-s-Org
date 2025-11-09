@@ -59,6 +59,7 @@ export interface Patient {
   dob: string; // YYYY-MM-DD
   gender: 'Masculino' | 'Femenino' | 'Otro';
   contact: string;
+  curp?: string;
   allergies?: string;
   familyHistory?: string;
   pathologicalHistory?: string;
@@ -111,12 +112,14 @@ export interface Consultation {
   diagnosis: string;
   prescription: Prescription;
   labStudies?: string;
+  labResults?: string;
   nextAppointment?: string; // YYYY-MM-DD
   cost?: number;
   ultrasoundReportType?: string;
   ultrasoundReportFindings?: string;
   ultrasoundReportImpression?: string;
   ultrasoundImages?: string[]; // Array of base64 strings
+  aiMedicalNote?: string; // Campo para guardar la nota de IA
   // Prenatal fields
   gestas?: number;
   partos?: number;

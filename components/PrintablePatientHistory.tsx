@@ -50,6 +50,7 @@ const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.fo
                 <p><span className="font-bold">EDAD:</span> {patientAge?.toUpperCase()}</p>
                 <p><span className="font-bold">GÉNERO:</span> {patient.gender}</p>
                 <p><span className="font-bold">CONTACTO:</span> {patient.contact}</p>
+                {patient.curp && <p><span className="font-bold">CURP:</span> {patient.curp}</p>}
             </div>
              {patient.allergies && patient.allergies.toUpperCase() !== 'NINGUNA' && patient.allergies.toUpperCase() !== 'NEGADAS' && (
                 <div className="mt-2 text-center border border-red-600 p-1">
@@ -112,6 +113,12 @@ const PrintablePatientHistory: React.FC<PrintablePatientHistoryProps> = React.fo
                             )}
                             <p><span className="font-bold">Examen Físico:</span> {c.physicalExam}</p>
                             <p><span className="font-bold">Diagnóstico:</span> {c.diagnosis}</p>
+                            {c.labResults && (
+                                <div>
+                                    <p className="font-bold">Resultados de Laboratorio:</p>
+                                    <p className="whitespace-pre-wrap pl-4 bg-slate-100 p-1 rounded-sm text-xs">{c.labResults}</p>
+                                </div>
+                            )}
                              {c.prescription && c.prescription.medications.length > 0 && (
                                 <div>
                                     <p className="font-bold">Tratamiento:</p>

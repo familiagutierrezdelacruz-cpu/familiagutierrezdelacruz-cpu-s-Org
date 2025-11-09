@@ -1,25 +1,28 @@
 import React, { useState, useMemo } from 'react';
-import { Patient, Doctor, Consultation, HealthUnit } from '../types';
-import { calculateAge } from '../utils/dateUtils';
+import { Patient, Consultation, Doctor, HealthUnit, VitalSigns } from '../types';
 import Modal from './Modal';
 import PatientForm from './PatientForm';
 import ConsultationForm from './ConsultationForm';
-import NewWindow from './NewWindow';
+import ConfirmationModal from './ConfirmationModal';
 import PrintablePrescription from './PrintablePrescription';
 import PrintableUltrasoundReport from './PrintableUltrasoundReport';
 import PrintablePatientHistory from './PrintablePatientHistory';
-import EvolutionChart from './EvolutionChart';
+import PrintableAINote from './PrintableAINote';
+import PrintableIMSSNote from './PrintableIMSSNote';
+import NewWindow from './NewWindow';
+import { generateAIMedicalNote } from '../services/geminiService';
+import { calculateAge, parseLocalDate } from '../utils/dateUtils';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { PencilIcon } from './icons/PencilIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { PrintIcon } from './icons/PrintIcon';
-import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
-import { ChartBarSquareIcon } from './icons/ChartBarSquareIcon';
-import { MinusIcon } from './icons/MinusIcon';
-import { ChartPieIcon } from './icons/ChartPieIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import ConfirmationModal from './ConfirmationModal';
+import { DocumentSparklesIcon } from './icons/DocumentSparklesIcon';
+import { RefreshIcon } from './icons/RefreshIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
+
 
 interface PatientDetailProps {
   patient: Patient;
@@ -30,10 +33,25 @@ interface PatientDetailProps {
   onBack: () => void;
   onUpdatePatient: (patient: Patient) => void;
   onDeletePatient: (patientId: string) => void;
-  onAddConsultation: (consultation: Omit<Consultation, 'id'>) => void;
+  onAddConsultation: (consultation: Omit<Consultation, 'id'> | Consultation) => void;
   onUpdateConsultation: (consultation: Consultation) => void;
   onDeleteConsultation: (consultationId: string) => void;
 }
+
+const VitalSignsDisplay: React.FC<{ vitals: VitalSigns }> = ({ vitals }) => (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs">
+        {vitals.systolicBP && vitals.diastolicBP && <p><span className="font-semibold">T.A.:</span> {vitals.systolicBP}/{vitals.diastolicBP} mmHg</p>}
+        {vitals.map && <p><span className="font-semibold">T.A.M.:</span> {vitals.map.toFixed(1)} mmHg</p>}
+        {vitals.heartRate && <p><span className="font-semibold">F.C.:</span> {vitals.heartRate} lpm</p>}
+        {vitals.respiratoryRate && <p><span className="font-semibold">F.R.:</span> {vitals.respiratoryRate} rpm</p>}
+        {vitals.temperature && <p><span className="font-semibold">Temp:</span> {vitals.temperature} °C</p>}
+        {vitals.oxygenSaturation && <p><span className="font-semibold">Sat O₂:</span> {vitals.oxygenSaturation} %</p>}
+        {vitals.glucose && <p><span className="font-semibold">Glucosa:</span> {vitals.glucose} mg/dL</p>}
+        {vitals.weight && <p><span className="font-semibold">Peso:</span> {vitals.weight} kg</p>}
+        {vitals.height && <p><span className="font-semibold">Talla:</span> {vitals.height} m</p>}
+        {vitals.bmi && <p className="col-span-1"><span className="font-semibold">IMC:</span> {vitals.bmi} <span className="text-xs">({vitals.bmiInterpretation})</span></p>}
+    </div>
+);
 
 const PatientDetail: React.FC<PatientDetailProps> = ({
   patient,
@@ -50,36 +68,26 @@ const PatientDetail: React.FC<PatientDetailProps> = ({
 }) => {
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
-  const [editingConsultation, setEditingConsultation] = useState<Consultation | null>(null);
-  
-  const [isPrinting, setIsPrinting] = useState<null | 'prescription' | 'ultrasound' | 'history'>(null);
-  const [consultationToPrint, setConsultationToPrint] = useState<Consultation | null>(null);
-  const [isChartsModalOpen, setIsChartsModalOpen] = useState(false);
-  
-  const [expandedConsultationId, setExpandedConsultationId] = useState<string | null>(null);
-  const [isDeletePatientModalOpen, setIsDeletePatientModalOpen] = useState(false);
+  const [editingConsultation, setEditingConsultation] = useState<Consultation | undefined>(undefined);
   const [consultationToDelete, setConsultationToDelete] = useState<Consultation | null>(null);
+  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
+  
+  const [printingComponent, setPrintingComponent] = useState<React.ReactNode | null>(null);
+  const [isGeneratingNote, setIsGeneratingNote] = useState(false);
+  const [viewingAINote, setViewingAINote] = useState<Consultation | null>(null);
 
-  const sortedConsultations = useMemo(() => {
-    return [...consultations].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [consultations]);
-
-  const patientAge = useMemo(() => calculateAge(patient.dob), [patient.dob]);
-
+  const sortedConsultations = useMemo(() => 
+    [...consultations].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
+    [consultations]
+  );
+  
   const handleEditPatient = () => setIsPatientModalOpen(true);
-  
-  const handleSavePatient = (patientData: Omit<Patient, 'id' | 'doctorId' | 'patientCode' | 'healthUnitId'> | Patient) => {
-    onUpdatePatient(patientData as Patient);
-    setIsPatientModalOpen(false);
-  };
-  
-  const handleNewConsultation = () => {
-    setEditingConsultation(null);
+  const handleAddNewConsultation = () => {
+    setEditingConsultation(undefined);
     setIsConsultationModalOpen(true);
   };
-
-  const handleEditConsultation = (consult: Consultation) => {
-    setEditingConsultation(consult);
+  const handleEditConsultation = (consultation: Consultation) => {
+    setEditingConsultation(consultation);
     setIsConsultationModalOpen(true);
   };
   
@@ -90,25 +98,13 @@ const PatientDetail: React.FC<PatientDetailProps> = ({
       onAddConsultation(consultationData);
     }
     setIsConsultationModalOpen(false);
-    setEditingConsultation(null);
   };
   
-  const handlePrintPrescription = (consult: Consultation) => {
-    setConsultationToPrint(consult);
-    setIsPrinting('prescription');
-  };
-
-  const handlePrintUltrasound = (consult: Consultation) => {
-    setConsultationToPrint(consult);
-    setIsPrinting('ultrasound');
-  };
-
-  const handlePrintHistory = () => {
-    setIsPrinting('history');
-  };
-
   const confirmDeletePatient = () => {
-    onDeletePatient(patient.id);
+    if (patientToDelete) {
+      onDeletePatient(patientToDelete.id);
+      setPatientToDelete(null);
+    }
   };
   
   const confirmDeleteConsultation = () => {
@@ -117,380 +113,182 @@ const PatientDetail: React.FC<PatientDetailProps> = ({
       setConsultationToDelete(null);
     }
   };
-  
-  const getVitalSignEvolution = (key: keyof import('../types').VitalSigns) => {
-    return sortedConsultations
-      .filter(c => c.vitalSigns && c.vitalSigns[key] != null)
-      .map(c => ({
-          label: new Date(c.date).toLocaleDateString('es-MX'),
-          value: c.vitalSigns![key] as number,
-      }))
-      .reverse(); // Reverse to show oldest to newest
+
+  const handlePrint = (component: React.ReactNode) => {
+    setPrintingComponent(component);
   };
 
-  const getBloodPressureEvolution = () => {
-     const data = sortedConsultations
-      .filter(c => c.vitalSigns && c.vitalSigns.systolicBP != null && c.vitalSigns.diastolicBP != null)
-      .map(c => ({
-        label: new Date(c.date).toLocaleDateString('es-MX'),
-        systolic: c.vitalSigns!.systolicBP as number,
-        diastolic: c.vitalSigns!.diastolicBP as number
-      }))
-      .reverse();
-    return {
-        systolic: data.map(d => ({ label: d.label, value: d.systolic })),
-        diastolic: data.map(d => ({ label: d.label, value: d.diastolic })),
+  const handleGenerateOrViewNote = async (consultation: Consultation, regenerate = false) => {
+    if (consultation.aiMedicalNote && !regenerate) {
+        setViewingAINote(consultation);
+        return;
     }
+    setIsGeneratingNote(true);
+    // If modal is not open, open it to show loading state
+    if (!viewingAINote) {
+        setViewingAINote(consultation);
+    }
+
+    const note = await generateAIMedicalNote(patient, consultation);
+    const updatedConsultation = { ...consultation, aiMedicalNote: note };
+    onUpdateConsultation(updatedConsultation);
+
+    // Update the consultation being viewed with the new note
+    setViewingAINote(updatedConsultation);
+    setIsGeneratingNote(false);
   };
+
+  const patientAge = calculateAge(patient.dob);
   
-  const toggleConsultationDetails = (id: string) => {
-      setExpandedConsultationId(prevId => (prevId === id ? null : id));
-  };
-
-  const getBPStatus = (systolic?: number, diastolic?: number) => {
-    if (systolic === undefined || diastolic === undefined) return { text: '', color: 'text-slate-500' };
-    if (systolic < 90 || diastolic < 60) return { text: 'Hipotensión', color: 'text-blue-600' };
-    if (systolic >= 140 || diastolic >= 90) return { text: 'Hipertensión', color: 'text-red-600' };
-    if (systolic >= 130 || diastolic >= 80) return { text: 'Elevada', color: 'text-yellow-600' };
-    return { text: 'Normal', color: 'text-green-600' };
-  };
-
-  const getBMIStatusColor = (interpretation?: string) => {
-      if (!interpretation) return 'text-slate-500';
-      if (interpretation === 'Bajo peso') return 'text-blue-500';
-      if (interpretation === 'Normal') return 'text-green-600';
-      if (interpretation === 'Sobrepeso') return 'text-yellow-600';
-      if (interpretation === 'Obesidad') return 'text-red-600';
-      return 'text-slate-500';
-  };
-
-  const prenatalConsultations = useMemo(() => {
-    return sortedConsultations.filter(c => c.attentionType === 'ATENCION PRENATAL');
-  }, [sortedConsultations]);
-
-  const getPrenatalEvolution = (key: keyof Consultation | keyof import('../types').VitalSigns) => {
-    return prenatalConsultations
-      .filter(c => {
-        if (['weight', 'map'].includes(key as string)) {
-          return c.vitalSigns && c.vitalSigns[key as keyof import('../types').VitalSigns] != null;
-        }
-        return c[key as keyof Consultation] != null;
-      })
-      .map(c => {
-         let value: number;
-         if (['weight', 'map'].includes(key as string)) {
-            value = c.vitalSigns![key as keyof import('../types').VitalSigns] as number;
-         } else {
-            value = c[key as keyof Consultation] as number;
-         }
-         return {
-          label: new Date(c.date).toLocaleDateString('es-MX'),
-          value: value,
-         }
-      })
-      .reverse(); // from oldest to newest
-  };
-
-  const weightData = getPrenatalEvolution('weight');
-  const afuData = getPrenatalEvolution('afu');
-  const mapData = getPrenatalEvolution('map');
-
-
-  const EvolutionCharts = () => (
-    <div className="space-y-8">
-        <h3 className="text-xl font-bold text-center">Gráficas de Evolución</h3>
-        <EvolutionChart data={getVitalSignEvolution('weight')} title="Evolución del Peso" unit="kg" lineColorClassName="stroke-blue-500" pointColorClassName="fill-blue-500" />
-        <EvolutionChart data={getVitalSignEvolution('temperature')} title="Evolución de Temperatura" unit="°C" lineColorClassName="stroke-red-500" pointColorClassName="fill-red-500" />
-        <EvolutionChart data={getBloodPressureEvolution().systolic} title="Evolución T.A. Sistólica" unit="mmHg" lineColorClassName="stroke-purple-500" pointColorClassName="fill-purple-500" />
-        <EvolutionChart data={getBloodPressureEvolution().diastolic} title="Evolución T.A. Diastólica" unit="mmHg" lineColorClassName="stroke-indigo-500" pointColorClassName="fill-indigo-500" />
-    </div>
-  );
-
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
-      <header className="mb-6 pb-4 border-b">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+      <header className="mb-4 pb-4 border-b">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
           <div>
-            <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 mb-2">
-              <ChevronLeftIcon className="w-4 h-4" />
-              <span>Volver a la lista</span>
+            <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-2">
+              <ChevronLeftIcon className="w-5 h-5" />
+              <span>Volver a la Lista</span>
             </button>
             <h1 className="text-3xl font-bold text-slate-800">{patient.name}</h1>
-            <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
-              {patient.patientCode && <span className="font-mono bg-slate-100 px-2 py-1 rounded">{patient.patientCode}</span>}
-              <span>{patientAge}</span>
-              <span>{patient.gender}</span>
-              <span>{patient.contact}</span>
-            </div>
+            <p className="text-slate-500">
+                {patient.patientCode && <span className="font-mono bg-slate-100 px-2 py-1 rounded-md text-sm">{patient.patientCode}</span>}
+                <span className="mx-2">|</span>
+                {patientAge}
+                <span className="mx-2">|</span>
+                {patient.gender}
+            </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button onClick={handleEditPatient} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">
-              <PencilIcon className="w-4 h-4"/><span>Editar Paciente</span>
+              <PencilIcon className="w-4 h-4" /><span>Editar Paciente</span>
             </button>
-            <button onClick={handlePrintHistory} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">
-              <ClipboardDocumentListIcon className="w-4 h-4"/><span>Imprimir Historia</span>
-            </button>
-             <button onClick={() => setIsChartsModalOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">
-              <ChartBarSquareIcon className="w-4 h-4"/><span>Ver Gráficas</span>
-            </button>
-            <button onClick={() => setIsDeletePatientModalOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200">
-              <TrashIcon className="w-4 h-4"/><span>Eliminar Paciente</span>
+            <button onClick={() => setPatientToDelete(patient)} className="flex items-center gap-2 px-3 py-2 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200">
+              <TrashIcon className="w-4 h-4" /><span>Eliminar Paciente</span>
             </button>
           </div>
         </div>
       </header>
-
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Patient Info Column */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="p-4 bg-slate-50 rounded-lg border">
-            <h3 className="font-bold text-slate-700 mb-2">Antecedentes Médicos</h3>
-            <div className="text-sm text-slate-600 space-y-2">
-              <p><strong className="font-semibold">Alergias:</strong> {patient.allergies || 'No registradas'}</p>
-              <p><strong className="font-semibold">Familiares:</strong> {patient.familyHistory || 'No registrados'}</p>
-              <p><strong className="font-semibold">Patológicos:</strong> {patient.pathologicalHistory || 'No registrados'}</p>
-              <p><strong className="font-semibold">No Patológicos:</strong> {patient.nonPathologicalHistory || 'No registrados'}</p>
-              <p><strong className="font-semibold">Quirúrgicos:</strong> {patient.surgicalHistory || 'No registrados'}</p>
-            </div>
+        <div className="lg:col-span-1 space-y-4 text-sm">
+          <div className="p-4 border rounded-md bg-slate-50">
+            <h3 className="font-bold text-slate-700 mb-2 border-b pb-1">Información de Contacto</h3>
+            <p><span className="font-semibold">Tel/Email:</span> {patient.contact}</p>
+            {patient.curp && <p><span className="font-semibold">CURP:</span> {patient.curp}</p>}
           </div>
-          {patient.gender === 'Femenino' && (
-            <div className="p-4 bg-pink-50 rounded-lg border border-pink-200">
-              <h3 className="font-bold text-pink-800 mb-2">Historial Ginecológico</h3>
-              <div className="text-sm text-slate-600 space-y-2">
-                  <p><strong className="font-semibold">Antecedentes:</strong> {patient.gynecologicalHistory || 'No registrados'}</p>
-                  <p><strong className="font-semibold">Último Papanicolaou:</strong> {patient.lastPapanicolaou ? new Date(`${patient.lastPapanicolaou}T00:00:00`).toLocaleDateString('es-MX') : 'No registrado'}</p>
-                  <p><strong className="font-semibold">Última Colposcopia:</strong> {patient.lastColposcopy ? new Date(`${patient.lastColposcopy}T00:00:00`).toLocaleDateString('es-MX') : 'No registrado'}</p>
-              </div>
-            </div>
-          )}
-           {prenatalConsultations.length >= 2 && (
-            <div className="p-4 bg-slate-50 rounded-lg border">
-              <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                <ChartPieIcon className="w-6 h-6 text-pink-600" />
-                <span>Evolución Prenatal</span>
-              </h3>
-              <div className="space-y-4">
-                {weightData.length >= 2 && (
-                  <EvolutionChart 
-                    data={weightData} 
-                    title="Evolución del Peso" 
-                    unit="kg" 
-                    lineColorClassName="stroke-blue-500" 
-                    pointColorClassName="fill-blue-500" 
-                  />
-                )}
-                {afuData.length >= 2 && (
-                  <EvolutionChart 
-                    data={afuData} 
-                    title="Evolución de Altura de Fondo Uterino" 
-                    unit="cm" 
-                    lineColorClassName="stroke-purple-500" 
-                    pointColorClassName="fill-purple-500" 
-                  />
-                )}
-                {mapData.length >= 2 && (
-                  <EvolutionChart 
-                    data={mapData} 
-                    title="Evolución de Tensión Arterial Media (PAM)" 
-                    unit="mmHg" 
-                    lineColorClassName="stroke-green-500" 
-                    pointColorClassName="fill-green-500" 
-                  />
-                )}
-                {weightData.length < 2 && afuData.length < 2 && mapData.length < 2 && (
-                  <p className="text-sm text-slate-500 text-center">No hay suficientes datos para generar gráficas de evolución prenatal.</p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Consultations Column */}
-        <div className="lg:col-span-2">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-700">Historial de Consultas</h2>
-            <button onClick={handleNewConsultation} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-              <PlusIcon className="w-5 h-5"/><span>Nueva Consulta</span>
+          <div className="p-4 border rounded-md bg-slate-50 max-h-96 overflow-y-auto">
+            <h3 className="font-bold text-slate-700 mb-2 border-b pb-1">Antecedentes Médicos</h3>
+             <p><span className="font-semibold">Alergias:</span> {patient.allergies || 'Ninguna'}</p>
+             <p><span className="font-semibold">A. Familiares:</span> {patient.familyHistory || 'No registrados'}</p>
+             <p><span className="font-semibold">A. Patológicos:</span> {patient.pathologicalHistory || 'No registrados'}</p>
+             <p><span className="font-semibold">A. No Patológicos:</span> {patient.nonPathologicalHistory || 'No registrados'}</p>
+             <p><span className="font-semibold">A. Quirúrgicos:</span> {patient.surgicalHistory || 'No registrados'}</p>
+             {patient.gender === 'Femenino' && <p><span className="font-semibold">A. Ginecológicos:</span> {patient.gynecologicalHistory || 'No registrados'}</p>}
+          </div>
+          <button onClick={() => handlePrint(<PrintablePatientHistory patient={patient} doctor={doctor} consultations={consultations} healthUnit={healthUnit} />)} className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300">
+              <ClipboardDocumentListIcon className="w-4 h-4" />
+              <span>Imprimir Historia Clínica</span>
             </button>
-          </div>
-          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-            {sortedConsultations.length > 0 ? (
-              sortedConsultations.map(consult => {
-                  const isExpanded = expandedConsultationId === consult.id;
-                  const bpStatus = getBPStatus(consult.vitalSigns?.systolicBP, consult.vitalSigns?.diastolicBP);
-                  const bmiStatusColor = getBMIStatusColor(consult.vitalSigns?.bmiInterpretation);
-                  return (
-                  <div key={consult.id} className="border rounded-lg bg-white overflow-hidden">
-                    <div 
-                        className="p-4 cursor-pointer hover:bg-slate-50 flex justify-between items-center"
-                        onClick={() => toggleConsultationDetails(consult.id)}
-                    >
-                      <div>
-                        <p className="font-bold text-slate-800">{new Date(consult.date).toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' })}</p>
-                        <p className="text-sm text-slate-600">{consult.reason}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? <MinusIcon className="w-5 h-5 text-slate-500" /> : <PlusIcon className="w-5 h-5 text-slate-500" />}
-                      </div>
-                    </div>
-                    
-                    {isExpanded && (
-                      <div className="p-4 border-t bg-slate-50/50 text-sm">
-                        <div className="space-y-4">
-                            {consult.attentionType && <p><strong className="font-semibold">Tipo de Atención:</strong> {consult.attentionType}</p>}
-                            
-                            {consult.attentionType === 'ATENCION PRENATAL' && (
-                                <div className="text-xs mt-2 p-2 bg-pink-50 border border-pink-200 rounded-md">
-                                    <p className="font-bold text-center mb-1 text-pink-800">DATOS PRENATALES</p>
-                                    <p><strong className="font-semibold">G:</strong> {consult.gestas} <strong className="font-semibold">P:</strong> {consult.partos} <strong className="font-semibold">A:</strong> {consult.abortos} <strong className="font-semibold">C:</strong> {consult.cesareas}</p>
-                                    {consult.fur && <p><strong className="font-semibold">FUR:</strong> {new Date(`${consult.fur}T00:00:00`).toLocaleDateString('es-MX')} - <strong className="font-semibold">SDG (FUR):</strong> {consult.sdg}</p>}
-                                    {consult.fpp && <p><strong className="font-semibold">FPP (FUR):</strong> {new Date(`${consult.fpp}T00:00:00`).toLocaleDateString('es-MX', { dateStyle: 'long' })}</p>}
-                                    {(consult.fcf !== undefined || consult.afu !== undefined) &&
-                                        <p>
-                                            {consult.fcf !== undefined && <span><strong className="font-semibold">FCF:</strong> {consult.fcf} lpm</span>}
-                                            {consult.fcf !== undefined && consult.afu !== undefined && <span> | </span>}
-                                            {consult.afu !== undefined && <span><strong className="font-semibold">AFU:</strong> {consult.afu} cm</span>}
-                                        </p>
-                                    }
-                                    {(consult.sdgByUsg || consult.fppByUsg) && (
-                                        <div className="mt-2 pt-2 border-t border-pink-200">
-                                            <p className="font-bold text-center mb-1 text-purple-800">Datos por Ultrasonido</p>
-                                            {consult.usgDate && <p><strong className="font-semibold">Fecha USG:</strong> {new Date(`${consult.usgDate}T00:00:00`).toLocaleDateString('es-MX')} ({consult.usgWeeks}S, {consult.usgDays}D)</p>}
-                                            {consult.sdgByUsg && <p><strong className="font-semibold">SDG (Actual):</strong> {consult.sdgByUsg}</p>}
-                                            {consult.fppByUsg && <p><strong className="font-semibold">FPP (USG):</strong> {new Date(`${consult.fppByUsg}T00:00:00`).toLocaleDateString('es-MX', { dateStyle: 'long' })}</p>}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {consult.vitalSigns && (
-                                <div>
-                                    <h4 className="font-bold text-slate-700 mb-1">Signos Vitales:</h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs pl-4">
-                                        {consult.vitalSigns.systolicBP && <p><strong>T.A.:</strong> {consult.vitalSigns.systolicBP}/{consult.vitalSigns.diastolicBP} <span className={`font-bold ${bpStatus.color}`}>({bpStatus.text})</span></p>}
-                                        {consult.vitalSigns.heartRate && <p><strong>F.C.:</strong> {consult.vitalSigns.heartRate} lpm</p>}
-                                        {consult.vitalSigns.temperature && <p><strong>Temp:</strong> {consult.vitalSigns.temperature} °C</p>}
-                                        {consult.vitalSigns.weight && <p><strong>Peso:</strong> {consult.vitalSigns.weight} kg</p>}
-                                        {consult.vitalSigns.bmi && <p><strong>IMC:</strong> {consult.vitalSigns.bmi} <span className={`font-bold ${bmiStatusColor}`}>({consult.vitalSigns.bmiInterpretation})</span></p>}
-                                    </div>
-                                </div>
-                            )}
-                            <p><strong className="font-semibold">Exploración Física:</strong> {consult.physicalExam || 'N/A'}</p>
-                            <p><strong className="font-semibold">Diagnóstico:</strong> {consult.diagnosis}</p>
-                            
-                            {consult.prescription.medications.length > 0 && (
-                                <div>
-                                    <h4 className="font-bold text-slate-700">Receta:</h4>
-                                    <ul className="list-disc pl-8">
-                                        {consult.prescription.medications.map((m, i) => <li key={i}>{m.name} - {m.indication}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                             {consult.ultrasoundReportType && (
-                                <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                                    <h4 className="font-bold text-blue-800">Reporte de Ultrasonido:</h4>
-                                    <p><strong>Tipo:</strong> {consult.ultrasoundReportType}</p>
-                                    <p><strong>Hallazgos:</strong> {consult.ultrasoundReportFindings?.substring(0, 100)}...</p>
-                                </div>
-                            )}
-                            <div className="flex justify-end items-center gap-2 pt-2 border-t">
-                                <button onClick={() => handleEditConsultation(consult)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-blue-700">
-                                    <PencilIcon className="w-3 h-3"/><span>Editar</span>
-                                </button>
-                                <button onClick={() => handlePrintPrescription(consult)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-blue-700">
-                                    <PrintIcon className="w-3 h-3"/><span>Imprimir Receta</span>
-                                </button>
-                                {consult.ultrasoundReportType && (
-                                    <button onClick={() => handlePrintUltrasound(consult)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-blue-700">
-                                        <DocumentTextIcon className="w-3 h-3"/><span>Imprimir USG</span>
-                                    </button>
-                                )}
-                                <button onClick={() => setConsultationToDelete(consult)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-red-700">
-                                    <TrashIcon className="w-3 h-3"/><span>Eliminar</span>
-                                </button>
+        </div>
+        
+        <div className="lg:col-span-2">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-slate-700">Historial de Consultas</h2>
+                <button onClick={handleAddNewConsultation} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <PlusIcon className="w-5 h-5" />
+                    <span>Nueva Consulta</span>
+                </button>
+            </div>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                {sortedConsultations.map(c => (
+                    <div key={c.id} className="p-4 border rounded-lg bg-white shadow-sm">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="font-bold text-lg text-slate-800">{new Date(c.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</h3>
+                                <p className="text-sm text-slate-500">{c.attentionType || 'Consulta General'}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => handleEditConsultation(c)} className="p-2 text-slate-500 hover:text-blue-600"><PencilIcon className="w-4 h-4"/></button>
+                                <button onClick={() => setConsultationToDelete(c)} className="p-2 text-slate-500 hover:text-red-600"><TrashIcon className="w-4 h-4"/></button>
                             </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })
-            ) : (
-              <div className="text-center py-10 border-dashed border-2 rounded-lg">
-                <p className="text-slate-500">No hay consultas registradas para este paciente.</p>
-                <p className="text-sm text-slate-400 mt-1">Haga clic en "Nueva Consulta" para comenzar.</p>
-              </div>
-            )}
-          </div>
+                        <div className="mt-3 space-y-2 text-sm">
+                            <p><span className="font-semibold">Motivo:</span> {c.reason}</p>
+                            <p><span className="font-semibold">Diagnóstico:</span> {c.diagnosis}</p>
+                            {c.vitalSigns && Object.keys(c.vitalSigns).length > 0 && <VitalSignsDisplay vitals={c.vitalSigns} />}
+                        </div>
+                        <div className="mt-4 pt-3 border-t flex flex-wrap gap-2">
+                            <button onClick={() => handlePrint(<PrintablePrescription patient={patient} doctor={doctor} consultation={c} healthUnit={healthUnit} />)} className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200">
+                                <PrintIcon className="w-4 h-4"/> Receta
+                            </button>
+                             <button onClick={() => handlePrint(<PrintableIMSSNote patient={patient} doctor={doctor} consultation={c} healthUnit={healthUnit} />)} className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200">
+                                <DocumentDuplicateIcon className="w-4 h-4"/> Nota IMSS
+                            </button>
+                            {c.ultrasoundReportType && <button onClick={() => handlePrint(<PrintableUltrasoundReport patient={patient} doctor={doctor} consultation={c} healthUnit={healthUnit} />)} className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200">
+                               <DocumentTextIcon className="w-4 h-4"/> Reporte USG
+                            </button>}
+                            <button onClick={() => handleGenerateOrViewNote(c)} className="flex items-center gap-2 px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100">
+                                <DocumentSparklesIcon className="w-4 h-4"/>
+                                {c.aiMedicalNote ? 'Ver Nota IA' : 'Generar Nota IA'}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
       </div>
 
       <Modal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} size="2xl">
-        <PatientForm patient={patient} onSave={handleSavePatient} onCancel={() => setIsPatientModalOpen(false)} />
+        <PatientForm patient={patient} onSave={(p) => { onUpdatePatient(p as Patient); setIsPatientModalOpen(false); }} onCancel={() => setIsPatientModalOpen(false)} />
       </Modal>
 
       <Modal isOpen={isConsultationModalOpen} onClose={() => setIsConsultationModalOpen(false)} size="4xl">
-        <ConsultationForm 
-          patient={patient}
-          doctor={doctor}
-          consultation={editingConsultation || undefined}
-          patientConsultations={consultations}
-          medications={medications}
-          onSave={handleSaveConsultation}
-          onCancel={() => setIsConsultationModalOpen(false)}
-        />
+        <ConsultationForm patient={patient} doctor={doctor} consultation={editingConsultation} patientConsultations={consultations} medications={medications} onSave={handleSaveConsultation} onCancel={() => setIsConsultationModalOpen(false)} />
       </Modal>
 
-      <Modal isOpen={isChartsModalOpen} onClose={() => setIsChartsModalOpen(false)} size="3xl">
-          <div className="p-1 max-h-[85vh] overflow-y-auto">
-            <EvolutionCharts />
-             <div className="flex justify-end mt-4 pt-4 border-t">
-                <button onClick={() => setIsChartsModalOpen(false)} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">Cerrar</button>
-             </div>
-          </div>
-      </Modal>
+      {viewingAINote && (
+          <Modal isOpen={!!viewingAINote} onClose={() => setViewingAINote(null)} size="3xl">
+              <div className="p-2">
+                  <h3 className="text-2xl font-bold text-slate-800">Nota Médica (IA)</h3>
+                  <p className="text-sm text-slate-500 mb-4">Consulta del {new Date(viewingAINote.date).toLocaleDateString('es-MX', { dateStyle: 'long' })}</p>
+                  
+                  <div className="max-h-[60vh] overflow-y-auto p-4 bg-slate-50 border rounded-md">
+                      {isGeneratingNote ? (
+                          <div className="flex items-center justify-center h-48">
+                              <RefreshIcon className="w-8 h-8 text-blue-600 animate-spin" />
+                              <p className="ml-3 text-slate-600">Generando nota, por favor espere...</p>
+                          </div>
+                      ) : (
+                          <pre className="text-sm whitespace-pre-wrap font-sans">{viewingAINote.aiMedicalNote || 'No se ha generado una nota aún.'}</pre>
+                      )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
+                      <button onClick={() => handleGenerateOrViewNote(viewingAINote, true)} disabled={isGeneratingNote} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 disabled:opacity-50">
+                          <RefreshIcon className={`w-4 h-4 ${isGeneratingNote ? 'animate-spin' : ''}`} />
+                          <span>{isGeneratingNote ? 'Regenerando...' : 'Regenerar'}</span>
+                      </button>
+                      <button onClick={() => handlePrint(<PrintableAINote patient={patient} doctor={doctor} consultation={viewingAINote} healthUnit={healthUnit} noteContent={viewingAINote.aiMedicalNote!} />)} disabled={!viewingAINote.aiMedicalNote} className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 disabled:opacity-50">
+                          <PrintIcon className="w-4 h-4"/>
+                          <span>Imprimir</span>
+                      </button>
+                      <button onClick={() => setViewingAINote(null)} className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700">
+                        Cerrar
+                      </button>
+                  </div>
+              </div>
+          </Modal>
+      )}
+
+      <ConfirmationModal isOpen={!!patientToDelete} onClose={() => setPatientToDelete(null)} onConfirm={confirmDeletePatient} title="Eliminar Paciente" confirmButtonText="Sí, Eliminar Paciente">
+        ¿Está seguro de que desea eliminar a <strong>{patientToDelete?.name}</strong>? Esta acción es irreversible y borrará todo su historial.
+      </ConfirmationModal>
+
+      <ConfirmationModal isOpen={!!consultationToDelete} onClose={() => setConsultationToDelete(null)} onConfirm={confirmDeleteConsultation} title="Eliminar Consulta" confirmButtonText="Sí, Eliminar">
+        ¿Está seguro de que desea eliminar la consulta del <strong>{consultationToDelete && new Date(consultationToDelete.date).toLocaleDateString('es-MX')}</strong>?
+      </ConfirmationModal>
       
-      {isPrinting === 'prescription' && consultationToPrint && (
-        <NewWindow onClose={() => setIsPrinting(null)} title="Receta Médica">
-          <PrintablePrescription patient={patient} doctor={doctor} consultation={consultationToPrint} healthUnit={healthUnit} />
-        </NewWindow>
-      )}
-
-      {isPrinting === 'ultrasound' && consultationToPrint && (
-        <NewWindow onClose={() => setIsPrinting(null)} title="Reporte de Ultrasonido">
-          <PrintableUltrasoundReport patient={patient} doctor={doctor} consultation={consultationToPrint} healthUnit={healthUnit} />
-        </NewWindow>
-      )}
-
-      {isPrinting === 'history' && (
-        <NewWindow onClose={() => setIsPrinting(null)} title="Historia Clínica">
-          <PrintablePatientHistory patient={patient} doctor={doctor} consultations={consultations} healthUnit={healthUnit} />
-        </NewWindow>
-      )}
-
-      <ConfirmationModal
-        isOpen={isDeletePatientModalOpen}
-        onClose={() => setIsDeletePatientModalOpen(false)}
-        onConfirm={confirmDeletePatient}
-        title="Eliminar Paciente"
-        confirmButtonText="Sí, Eliminar Paciente"
-      >
-        ¿Está seguro de que desea eliminar permanentemente a <strong>{patient.name}</strong>?
-        <br />
-        Esta acción es irreversible y borrará todo el historial y las consultas del paciente.
-      </ConfirmationModal>
-
-      <ConfirmationModal
-        isOpen={!!consultationToDelete}
-        onClose={() => setConsultationToDelete(null)}
-        onConfirm={confirmDeleteConsultation}
-        title="Eliminar Consulta"
-        confirmButtonText="Sí, Eliminar Consulta"
-      >
-        ¿Está seguro de que desea eliminar esta consulta del <strong>{consultationToDelete ? new Date(consultationToDelete.date).toLocaleDateString('es-MX') : ''}</strong>?
-        <br />
-        Esta acción es irreversible.
-      </ConfirmationModal>
+      {printingComponent && <NewWindow onClose={() => setPrintingComponent(null)}>{printingComponent}</NewWindow>}
     </div>
   );
 };

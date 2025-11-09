@@ -14,6 +14,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onSave, onCancel }) 
     dob: patient?.dob || '',
     gender: patient?.gender || 'Masculino',
     contact: patient?.contact || '',
+    curp: patient?.curp || '',
     allergies: patient?.allergies || '',
     familyHistory: patient?.familyHistory ?? (!patient ? 'PREGUNTADOS Y NEGADOS' : ''),
     pathologicalHistory: patient?.pathologicalHistory ?? (!patient ? 'PREGUNTADOS Y NEGADOS' : ''),
@@ -73,6 +74,22 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onSave, onCancel }) 
         <div>
             <label htmlFor="contact" className="block text-sm font-medium text-slate-700">Contacto (Teléfono/Email)</label>
             <input type="text" name="contact" id="contact" value={formData.contact} onChange={handleChange} className="mt-1 block w-full input-style" required />
+        </div>
+        <div>
+            <label htmlFor="curp" className="block text-sm font-medium text-slate-700">CURP</label>
+            <input 
+              type="text" 
+              name="curp" 
+              id="curp" 
+              value={formData.curp} 
+              onChange={handleChange} 
+              className="mt-1 block w-full input-style font-mono" 
+              maxLength={18} 
+              pattern="[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9][0-9]"
+              title="El CURP debe tener 18 caracteres en mayúsculas."
+              placeholder="E.g., ABCD123456HABCDEF1"
+            />
+            <p className="mt-1 text-xs text-slate-500">La Clave Única de Registro de Población es un código de 18 caracteres.</p>
         </div>
       </fieldset>
       
